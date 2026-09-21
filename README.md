@@ -10,9 +10,12 @@ The design reasoning, trade-offs and what I left out are in
 
 ## Run it
 
+Needs Python 3.11+ (`python3 --version`). Nothing is installed globally and
+there is no build step.
+
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"                  # fastapi, uvicorn, pydantic, pytest
+pip install -r requirements.txt          # fastapi, uvicorn, pydantic, pytest
 
 # 1. replay the sample morning and watch the notifications fire
 python -m app.replay data/events.jsonl --fresh
@@ -23,6 +26,11 @@ python -m uvicorn app.api:app --reload   # → http://127.0.0.1:8000
 # 3. the tests
 python -m pytest
 ```
+
+Everything runs from the repository root, so the package does not need to be
+installed. If you would rather install it, `pip install -e ".[dev]"` does the
+same thing — but that needs pip 21.3 or newer for editable installs from
+`pyproject.toml` (`pip install --upgrade pip` if yours is older).
 
 `--fresh` starts from an empty database and seeds a demo team (two team leads,
 a head of support, eight agents) with a starter rule book.
