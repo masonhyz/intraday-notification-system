@@ -11,16 +11,17 @@ The design reasoning, trade-offs and what I left out are in
 ## Run it
 
 ```bash
-pip install -e ".[dev]"            # fastapi, uvicorn, pydantic, pytest
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"                  # fastapi, uvicorn, pydantic, pytest
 
 # 1. replay the sample morning and watch the notifications fire
 python -m app.replay data/events.jsonl --fresh
 
 # 2. browse the result: inbox, rule builder, live state
-uvicorn app.api:app --reload       # → http://127.0.0.1:8000
+python -m uvicorn app.api:app --reload   # → http://127.0.0.1:8000
 
 # 3. the tests
-pytest
+python -m pytest
 ```
 
 `--fresh` starts from an empty database and seeds a demo team (two team leads,
