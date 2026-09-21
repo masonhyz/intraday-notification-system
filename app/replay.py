@@ -122,7 +122,7 @@ def main(argv: list[str] | None = None) -> int:
         f"{counts.get('duplicate', 0)} duplicate · {counts.get('rejected', 0)} rejected"
         f"  →  {store.notifications.count()} notifications"
     )
-    print(f"Database: {args.db}   (run `uvicorn app.api:app` to browse them)")
+    print(f"Database: {args.db}   (run `python -m uvicorn app.api:app` to browse them)")
     return 0
 
 
