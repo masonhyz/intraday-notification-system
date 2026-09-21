@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Intraday notifications</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #fff; --ink: #14181f; --muted: #6b7280; --line: #e4e7ec;
+    --info: #3b7ddd; --warning: #c77700; --critical: #c62828; --ok: #157a46;
+    --accent: #2b5fd9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  header {
+    background: var(--panel); border-bottom: 1px solid var(--line);
+    padding: 14px 24px; display: flex; align-items: center; gap: 24px; flex-wrap: wrap;
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 650; letter-spacing: -.01em; }
+  nav { display: flex; gap: 4px; }
+  nav button {
+    background: none; border: 0; padding: 6px 12px; border-radius: 6px;
+    font: inherit; color: var(--muted); cursor: pointer;
+  }
+  nav button.active { background: #eef2ff; color: var(--accent); font-weight: 600; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px; }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .spacer { flex: 1; }
+  .muted { color: var(--muted); }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 10px;
+  }
+  .card h3 { margin: 0 0 4px; font-size: 14px; font-weight: 620; }
+  .pill {
+    display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px;
+    font-weight: 600; text-transform: uppercase; letter-spacing: .04em; border: 1px solid;
+  }
+  .sev-info { color: var(--info); border-color: #cfe0f8; background: #f2f7ff; }
+  .sev-warning { color: var(--warning); border-color: #f4e2c0; background: #fdf8ef; }
+  .sev-critical { color: var(--critical); border-color: #f3cccc; background: #fdf3f3; }
+  .tag { font-size: 11px; color: var(--muted); border: 1px solid var(--line);
+         border-radius: 999px; padding: 1px 8px; background: #fafbfc; }
+  pre.body { margin: 8px 0 0; font: inherit; white-space: pre-wrap; color: #333a45; }
+  select, input[type=text], input[type=number] {
+    font: inherit; padding: 6px 8px; border: 1px solid var(--line);
+    border-radius: 6px; background: #fff; color: var(--ink); width: 100%;
+  }
+  select { max-width: 100%; }
+  header select { width: auto; min-width: 200px; }
+  button.primary {
+    background: var(--accent); color: #fff; border: 0; border-radius: 6px;
+    padding: 7px 14px; font: inherit; font-weight: 600; cursor: pointer;
+  }
+  button.ghost {
+    background: #fff; border: 1px solid var(--line); border-radius: 6px;
+    padding: 6px 10px; font: inherit; cursor: pointer; color: var(--muted);
+  }
+  button.ghost:hover { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; background: var(--panel);
+          border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  tr:last-child td { border-bottom: 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+  label.field { display: block; margin-bottom: 10px; font-size: 12px; color: var(--muted); }
+  label.field > span { display: block; margin-bottom: 4px; font-weight: 600; color: var(--ink); }
+  label.check { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--ink); }
+  .preview { background: #f2f6ff; border: 1px solid #d7e2fb; color: #1d3f91;
+             border-radius: 8px; padding: 10px 12px; margin: 12px 0; }
+  .preview.bad { background: #fdf3f3; border-color: #f3cccc; color: #8c2020; }
+  .tmpl { text-align: left; cursor: pointer; }
+  .tmpl:hover { border-color: var(--accent); }
+  .disabled { opacity: .55; }
+  .empty { color: var(--muted); padding: 32px; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Intraday notifications</h1>
+  <nav>
+    <button data-view="inbox" class="active">Inbox</button>
+    <button data-view="rules">Rules</button>
+    <button data-view="state">Live state</button>
+  </nav>
+  <div class="spacer"></div>
+  <div class="row">
+    <span class="muted">Viewing as</span>
+    <select id="whoami"></select>
+  </div>
+</header>
+
+<main>
+  <section id="view-inbox">
+    <div class="row" style="margin-bottom:12px">
+      <strong id="inbox-title">Everyone</strong>
+      <span class="muted" id="inbox-sub"></span>
+      <div class="spacer"></div>
+      <button class="ghost" id="refresh">Refresh</button>
+    </div>
+    <div id="inbox-list"></div>
+  </section>
+
+  <section id="view-rules" hidden>
+    <div class="row" style="margin-bottom:12px">
+      <strong>Rules</strong>
+      <span class="muted" id="rules-count"></span>
+      <div class="spacer"></div>
+      <button class="primary" id="new-rule">New rule</button>
+    </div>
+    <div id="rule-editor" hidden></div>
+    <div id="rules-list"></div>
+  </section>
+
+  <section id="view-state" hidden>
+    <h3>Open incidents</h3>
+    <div id="incidents"></div>
+    <h3 style="margin-top:24px">Queues</h3>
+    <div id="queues"></div>
+    <h3 style="margin-top:24px">Agents</h3>
+    <div id="agents"></div>
+  </section>
+</main>
+
+<script>
+const $ = (sel) => document.querySelector(sel);
+const el = (tag, attrs = {}, ...kids) => {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") node.className = v;
+    else if (k === "html") node.innerHTML = v;
+    else if (k.startsWith("on")) node.addEventListener(k.slice(2), v);
+    else if (v !== null && v !== undefined && v !== false) node.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) {
+    if (kid === null || kid === undefined || kid === false) continue;
+    node.append(kid.nodeType ? kid : document.createTextNode(kid));
+  }
+  return node;
+};
+const api = async (path, opts) => {
+  const res = await fetch(path, {
+    headers: { "content-type": "application/json" }, ...opts,
+  });
+  if (res.status === 204) return null;
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.detail || res.statusText);
+  return data;
+};
+const hhmm = (iso) => (iso || "").slice(11, 16);
+const dur = (s) => {
+  if (s === null || s === undefined) return "—";
+  s = Math.round(s);
+  if (s < 60) return s + "s";
+  const m = Math.floor(s / 60);
+  return m < 60 ? m + "m" : Math.floor(m / 60) + "h " + (m % 60) + "m";
+};
+
+let boot = null;
+let rules = [];
+
+/* ------------------------------------------------------------------ inbox */
+
+async function renderInbox() {
+  const who = $("#whoami").value;
+  const items = await api("/api/notifications?limit=200" + (who ? "&recipient=" + who : ""));
+  const user = boot.users.find((u) => u.id === who);
+  $("#inbox-title").textContent = user ? user.name : "Everyone";
+  $("#inbox-sub").textContent = user
+    ? `${user.role.replace(/_/g, " ")} · ${user.channel} · ${
+        user.digest_min_severity === "info"
+          ? "everything arrives immediately"
+          : "only " + user.digest_min_severity + " interrupts; the rest is digested"}`
+    : "every notification the system has sent";
+
+  const list = $("#inbox-list");
+  list.replaceChildren();
+  if (!items.length) {
+    list.append(el("div", { class: "empty" }, "Nothing yet. Replay the sample feed to populate this."));
+    return;
+  }
+  for (const n of items) {
+    list.append(
+      el("div", { class: "card" },
+        el("div", { class: "row" },
+          el("span", { class: "pill sev-" + n.severity }, n.severity),
+          el("strong", {}, n.title),
+          el("div", { class: "spacer" }),
+          n.delivery === "digest" ? el("span", { class: "tag" }, "held for digest") : null,
+          n.kind === "digest" ? el("span", { class: "tag" }, "digest") : null,
+          el("span", { class: "tag" }, n.channel),
+          el("span", { class: "muted" }, hhmm(n.created_at)),
+        ),
+        el("div", { class: "muted", style: "font-size:12px" },
+           "to " + n.recipient_id + (n.subject ? " · " + n.subject : "")),
+        el("pre", { class: "body" }, n.body),
+      )
+    );
+  }
+}
+
+/* ------------------------------------------------------------------ rules */
+
+async function renderRules() {
+  rules = await api("/api/rules");
+  $("#rules-count").textContent = `${rules.filter((r) => r.enabled).length} active of ${rules.length}`;
+  const list = $("#rules-list");
+  list.replaceChildren();
+  for (const r of rules) {
+    list.append(
+      el("div", { class: "card" + (r.enabled ? "" : " disabled") },
+        el("div", { class: "row" },
+          el("span", { class: "pill sev-" + r.severity }, r.severity),
+          el("strong", {}, r.name),
+          el("span", { class: "tag" }, r.subject_type),
+          el("div", { class: "spacer" }),
+          el("button", { class: "ghost", onclick: () => toggleRule(r) }, r.enabled ? "Disable" : "Enable"),
+          el("button", { class: "ghost", onclick: () => openEditor(null, r) }, "Edit"),
+          el("button", { class: "ghost", onclick: () => removeRule(r) }, "Delete"),
+        ),
+        el("div", { style: "margin-top:6px" }, r.description),
+      )
+    );
+  }
+}
+
+async function toggleRule(r) {
+  await api(`/api/rules/${r.id}/enabled`, {
+    method: "POST", body: JSON.stringify({ enabled: !r.enabled }),
+  });
+  renderRules();
+}
+
+async function removeRule(r) {
+  if (!confirm(`Delete "${r.name}"?`)) return;
+  await api(`/api/rules/${r.id}`, { method: "DELETE" });
+  renderRules();
+}
+
+/* Natural units: people think in minutes and percent, the API speaks seconds
+   and ratios. Convert at the edge. */
+const toNatural = (value, unit) =>
+  unit === "seconds" ? value / 60 : unit === "ratio" ? value * 100 : value;
+const fromNatural = (value, unit) =>
+  unit === "seconds" ? value * 60 : unit === "ratio" ? value / 100 : value;
+const unitLabel = (unit) => (unit === "seconds" ? "minutes" : unit === "ratio" ? "%" : "");
+
+function templatePicker() {
+  const box = el("div", { class: "card" },
+    el("div", { class: "row" },
+      el("strong", {}, "Start from a template"),
+      el("div", { class: "spacer" }),
+      el("button", { class: "ghost", onclick: closeEditor }, "Cancel")),
+    el("p", { class: "muted", style: "margin:4px 0 12px" },
+      "Templates carry sensible timing defaults. You can change anything afterwards."),
+    el("div", { class: "grid" },
+      boot.templates.map((t) =>
+        el("button", { class: "card tmpl", onclick: () => openEditor(t) },
+          el("div", { class: "row" },
+            el("span", { class: "pill sev-" + t.severity }, t.severity),
+            el("strong", {}, t.title)),
+          el("div", { class: "muted", style: "margin-top:4px" }, t.blurb),
+          el("div", { class: "tag", style: "margin-top:8px; display:inline-block" },
+            "for the " + t.for_whom))
+      )),
+    el("div", { style: "margin-top:12px" },
+      el("button", { class: "ghost", onclick: () => openEditor(null) }, "…or start from scratch")),
+  );
+  const host = $("#rule-editor");
+  host.replaceChildren(box);
+  host.hidden = false;
+}
+
+function closeEditor() {
+  $("#rule-editor").hidden = true;
+  $("#rule-editor").replaceChildren();
+}
+
+function openEditor(template, existing) {
+  const draft = existing
+    ? { ...existing }
+    : template
+    ? {
+        name: template.title, subject_type: template.subject_type, metric: template.metric,
+        operator: template.operator, threshold: template.threshold, severity: template.severity,
+        state_filter: template.state_filter, for_sec: template.for_sec,
+        clear_after_sec: template.clear_after_sec, renotify_sec: template.renotify_sec,
+        notify_on_resolve: template.notify_on_resolve, scope_mode: "all", scope_ids: [],
+        audience: template.audience, enabled: true,
+      }
+    : {
+        name: "", subject_type: "queue", metric: "tickets_waiting", operator: ">=",
+        threshold: 20, severity: "warning", state_filter: null, for_sec: 120,
+        clear_after_sec: 300, renotify_sec: 0, notify_on_resolve: true,
+        scope_mode: "all", scope_ids: [], audience: [{ type: "queue_leads" }], enabled: true,
+      };
+
+  const host = $("#rule-editor");
+  const form = el("div", { class: "card" });
+  const preview = el("div", { class: "preview" }, "…");
+
+  const rerender = () => { form.replaceChildren(...fields()); refreshPreview(); };
+
+  const refreshPreview = async () => {
+    const res = await api("/api/rules/preview", {
+      method: "POST", body: JSON.stringify(payload()),
+    }).catch((e) => ({ ok: false, error: e.message }));
+    preview.className = "preview" + (res.ok ? "" : " bad");
+    preview.textContent = res.ok ? res.description : res.error;
+  };
+
+  const payload = () => ({
+    name: draft.name || "Untitled rule",
+    subject_type: draft.subject_type,
+    metric: draft.metric,
+    operator: draft.operator,
+    threshold: Number(draft.threshold),
+    severity: draft.severity,
+    audience: draft.audience,
+    scope_mode: draft.scope_mode,
+    scope_ids: draft.scope_ids,
+    state_filter: draft.state_filter,
+    for_sec: Number(draft.for_sec) || 0,
+    clear_after_sec: Number(draft.clear_after_sec) || 0,
+    renotify_sec: Number(draft.renotify_sec) || 0,
+    notify_on_resolve: !!draft.notify_on_resolve,
+    enabled: draft.enabled !== false,
+  });
+
+  const set = (key, value, redraw = false) => {
+    draft[key] = value;
+    redraw ? rerender() : refreshPreview();
+  };
+
+  const metricsFor = (subject) => boot.metrics.filter((m) => m.subject_type === subject);
+  const metricDef = () => boot.metrics.find((m) => m.key === draft.metric);
+
+  const minutesField = (label, key, help) =>
+    el("label", { class: "field" }, el("span", {}, label + " (minutes)"),
+      el("input", {
+        type: "number", min: "0", step: "1", value: String((draft[key] || 0) / 60),
+        oninput: (e) => set(key, Math.max(0, Number(e.target.value || 0)) * 60),
+      }),
+      help ? el("span", { class: "muted" }, help) : null);
+
+  const audienceHas = (type, value) =>
+    draft.audience.some((a) => a.type === type && (a.value || null) === (value || null));
+  const toggleAudience = (type, value) => {
+    draft.audience = audienceHas(type, value)
+      ? draft.audience.filter((a) => !(a.type === type && (a.value || null) === (value || null)))
+      : [...draft.audience, value ? { type, value } : { type }];
+    rerender();
+  };
+
+  const fields = () => {
+    const md = metricDef() || metricsFor(draft.subject_type)[0];
+    const scopeOptions = draft.subject_type === "queue"
+      ? [["all", "Every queue"], ["ids", "Specific queues"]]
+      : [["all", "Every agent"], ["ids", "Specific agents"], ["queues", "Agents on specific queues"]];
+    const scopeChoices = draft.subject_type === "queue" || draft.scope_mode === "queues"
+      ? boot.queues : boot.agents;
+
+    return [
+      el("div", { class: "row" },
+        el("strong", {}, existing ? "Edit rule" : "New rule"),
+        el("div", { class: "spacer" }),
+        el("button", { class: "ghost", onclick: closeEditor }, "Cancel"),
+        el("button", { class: "primary", onclick: save }, "Save rule")),
+
+      el("div", { class: "grid", style: "margin-top:12px" },
+        el("label", { class: "field" }, el("span", {}, "Name"),
+          el("input", { type: "text", value: draft.name,
+                        oninput: (e) => set("name", e.target.value) })),
+
+        el("label", { class: "field" }, el("span", {}, "This rule watches"),
+          el("select", {
+            onchange: (e) => {
+              draft.subject_type = e.target.value;
+              draft.metric = metricsFor(e.target.value)[0].key;
+              draft.state_filter = null;
+              draft.scope_mode = "all"; draft.scope_ids = [];
+              draft.audience = e.target.value === "queue"
+                ? draft.audience.filter((a) => a.type !== "subject_agent")
+                : draft.audience;
+              rerender();
+            },
+          }, ["queue", "agent"].map((s) =>
+            el("option", { value: s, selected: draft.subject_type === s }, s + "s")))),
+
+        el("label", { class: "field" }, el("span", {}, "Which ones"),
+          el("select", { onchange: (e) => { draft.scope_mode = e.target.value; draft.scope_ids = []; rerender(); } },
+            scopeOptions.map(([v, t]) =>
+              el("option", { value: v, selected: draft.scope_mode === v }, t)))),
+
+        draft.scope_mode !== "all"
+          ? el("div", { class: "field" }, el("span", {}, "Pick"),
+              el("div", {}, scopeChoices.map((id) =>
+                el("label", { class: "check" },
+                  el("input", {
+                    type: "checkbox", checked: draft.scope_ids.includes(id),
+                    onchange: () => {
+                      draft.scope_ids = draft.scope_ids.includes(id)
+                        ? draft.scope_ids.filter((x) => x !== id)
+                        : [...draft.scope_ids, id];
+                      refreshPreview();
+                    },
+                  }), id))))
+          : null,
+      ),
+
+      el("div", { class: "grid" },
+        el("label", { class: "field" }, el("span", {}, "Condition"),
+          el("select", {
+            onchange: (e) => {
+              draft.metric = e.target.value;
+              const def = boot.metrics.find((m) => m.key === e.target.value);
+              if (!def.supports_state_filter) draft.state_filter = null;
+              rerender();
+            },
+          }, metricsFor(draft.subject_type).map((m) =>
+            el("option", { value: m.key, selected: draft.metric === m.key }, m.label))),
+          el("span", { class: "muted" }, md.description)),
+
+        el("label", { class: "field" }, el("span", {}, "Is"),
+          el("select", { onchange: (e) => set("operator", e.target.value) },
+            boot.operators.map((o) =>
+              el("option", { value: o, selected: draft.operator === o }, o)))),
+
+        el("label", { class: "field" },
+          el("span", {}, "Threshold" + (unitLabel(md.unit) ? ` (${unitLabel(md.unit)})` : "")),
+          el("input", {
+            type: "number", step: "any",
+            value: String(toNatural(Number(draft.threshold), md.unit)),
+            oninput: (e) => set("threshold", fromNatural(Number(e.target.value || 0), md.unit)),
+          })),
+
+        md.supports_state_filter
+          ? el("label", { class: "field" }, el("span", {}, "While the agent is"),
+              el("select", { onchange: (e) => set("state_filter", e.target.value || null) },
+                [el("option", { value: "", selected: !draft.state_filter }, "any state")].concat(
+                  boot.agent_states.map((s) =>
+                    el("option", { value: s, selected: draft.state_filter === s }, s)))))
+          : null,
+      ),
+
+      el("div", { class: "grid" },
+        minutesField("Only after it has been true for", "for_sec", "0 = fire immediately"),
+        minutesField("Only call it resolved after", "clear_after_sec", "stops flapping"),
+        minutesField("Remind every", "renotify_sec", "0 = never repeat"),
+        el("label", { class: "field" }, el("span", {}, "Severity"),
+          el("select", { onchange: (e) => set("severity", e.target.value) },
+            boot.severities.map((s) =>
+              el("option", { value: s, selected: draft.severity === s }, s)))),
+      ),
+
+      el("label", { class: "check", style: "margin-bottom:12px" },
+        el("input", { type: "checkbox", checked: draft.notify_on_resolve,
+                      onchange: (e) => set("notify_on_resolve", e.target.checked) }),
+        "Also notify when it recovers"),
+
+      el("div", { class: "field" }, el("span", {}, "Notify"),
+        el("div", { class: "grid" },
+          el("div", {},
+            el("label", { class: "check" },
+              el("input", { type: "checkbox", checked: audienceHas("queue_leads"),
+                            onchange: () => toggleAudience("queue_leads") }),
+              "whoever is responsible for the queue"),
+            draft.subject_type === "agent"
+              ? el("label", { class: "check" },
+                  el("input", { type: "checkbox", checked: audienceHas("subject_agent"),
+                                onchange: () => toggleAudience("subject_agent") }),
+                  "the agent involved")
+              : null,
+            el("label", { class: "check" },
+              el("input", { type: "checkbox", checked: audienceHas("role", "team_lead"),
+                            onchange: () => toggleAudience("role", "team_lead") }),
+              "every team lead"),
+            el("label", { class: "check" },
+              el("input", { type: "checkbox", checked: audienceHas("role", "head_of_support"),
+                            onchange: () => toggleAudience("role", "head_of_support") }),
+              "the head of support")),
+          el("div", {}, boot.users.filter((u) => u.role !== "agent").map((u) =>
+            el("label", { class: "check" },
+              el("input", { type: "checkbox", checked: audienceHas("user", u.id),
+                            onchange: () => toggleAudience("user", u.id) }),
+              u.name))))),
+
+      preview,
+    ];
+  };
+
+  const save = async () => {
+    try {
+      const body = JSON.stringify(payload());
+      if (existing) await api(`/api/rules/${existing.id}`, { method: "PUT", body });
+      else await api("/api/rules", { method: "POST", body });
+      closeEditor();
+      renderRules();
+    } catch (e) {
+      preview.className = "preview bad";
+      preview.textContent = e.message;
+    }
+  };
+
+  host.replaceChildren(form);
+  host.hidden = false;
+  rerender();
+}
+
+/* ------------------------------------------------------------------ state */
+
+const table = (headers, rows) =>
+  el("table", {},
+    el("thead", {}, el("tr", {}, headers.map((h) => el("th", {}, h)))),
+    el("tbody", {}, rows.map((r) => el("tr", {}, r.map((c) => el("td", {}, c === null || c === undefined ? "—" : String(c)))))));
+
+async function renderState() {
+  const s = await api("/api/state");
+  $("#incidents").replaceChildren(
+    s.incidents.length
+      ? table(["Rule", "Subject", "Severity", "Status", "Since", "Value"],
+          s.incidents.map((i) => [i.rule_name, i.subject, i.severity, i.status, hhmm(i.opened_at),
+                                  i.last_value === null ? "—" : Number(i.last_value).toFixed(2)]))
+      : el("div", { class: "empty" }, "Nothing firing right now."));
+
+  $("#queues").replaceChildren(
+    table(["Queue", "Waiting", "Longest wait", "SLA target", "SLA used", "Available", "On call", "Updated"],
+      s.queues.map((q) => [q.queue_id, q.tickets_waiting, dur(q.longest_wait_sec),
+        dur(q.sla_target_sec), q.sla_display, q.agents_available, q.agents_on_call, hhmm(q.updated_at)])));
+
+  $("#agents").replaceChildren(
+    table(["Agent", "State", "Since", "Scheduled", "Queues", "Adherence"],
+      s.agents.map((a) => [a.agent_id, a.state, hhmm(a.state_since), a.scheduled_state,
+        a.queue_ids.join(", "), a.in_violation ? "out of adherence" : "ok"])));
+}
+
+/* ------------------------------------------------------------------- boot */
+
+const views = { inbox: renderInbox, rules: renderRules, state: renderState };
+
+async function main() {
+  boot = await api("/api/bootstrap");
+  const who = $("#whoami");
+  who.replaceChildren(
+    el("option", { value: "" }, "Everyone"),
+    ...boot.users.map((u) => el("option", { value: u.id }, `${u.name} (${u.role.replace(/_/g, " ")})`)));
+  who.addEventListener("change", renderInbox);
+  $("#refresh").addEventListener("click", renderInbox);
+  $("#new-rule").addEventListener("click", templatePicker);
+
+  for (const button of document.querySelectorAll("nav button")) {
+    button.addEventListener("click", () => {
+      document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("active", b === button));
+      for (const name of Object.keys(views)) $("#view-" + name).hidden = name !== button.dataset.view;
+      views[button.dataset.view]();
+    });
+  }
+  renderInbox();
+}
+main();
+</script>
+</body>
+</html>
