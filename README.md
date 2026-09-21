@@ -10,30 +10,45 @@ The design reasoning, trade-offs and what I left out are in
 
 ## Run it
 
-Needs Python 3.11+ (`python3 --version`). Nothing is installed globally and
-there is no build step.
+Needs **Python 3.11+**. Nothing is installed globally and there is no build
+step. Set up the environment:
 
-```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt          # fastapi, uvicorn, pydantic, pytest
+```
+python3 -m venv .venv
+source .venv/bin/activate
+python --version
+pip install -r requirements.txt
+```
 
-# 1. replay the sample morning and watch the notifications fire
+If `python --version` comes back below 3.11, the venv was built from an older
+interpreter: `rm -rf .venv` and recreate it with a newer one (a python.org
+installer, or `uv venv --python 3.12`).
+
+Replay the sample morning and watch the notifications fire:
+
+```
 python -m app.replay data/events.jsonl --fresh
+```
 
-# 2. browse the result: inbox, rule builder, live state
-python -m uvicorn app.api:app --reload   # → http://127.0.0.1:8000
+Browse the result — inbox, rule builder, live state — at http://127.0.0.1:8000:
 
-# 3. the tests
+```
+python -m uvicorn app.api:app --reload
+```
+
+Run the tests:
+
+```
 python -m pytest
 ```
 
-Everything runs from the repository root, so the package does not need to be
-installed. If you would rather install it, `pip install -e ".[dev]"` does the
-same thing — but that needs pip 21.3 or newer for editable installs from
-`pyproject.toml` (`pip install --upgrade pip` if yours is older).
-
 `--fresh` starts from an empty database and seeds a demo team (two team leads,
 a head of support, eight agents) with a starter rule book.
+
+Everything runs from the repository root, so the package does not need to be
+installed. If you would rather install it, `pip install -e ".[dev]"` does the
+same thing — but editable installs from a `pyproject.toml` need pip 21.3 or
+newer.
 
 ## What you should see
 
